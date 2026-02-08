@@ -4,6 +4,7 @@ import me.sbi.core.Category
 import me.sbi.core.ModuleManager
 import me.sbi.gui.GuiStyle
 import me.sbi.modules.render.ClickGuiModule
+import net.fabricmc.loader.api.FabricLoader
 import me.sbi.utils.ui.HoverHandler
 import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.gui.components.EditBox
@@ -104,6 +105,8 @@ object ClickGui : Screen(Component.literal("Skyblock Improved")) {
 
         val helpY = h - FOOTER_HEIGHT + 6
         graphics.drawString(font, helpText, 8, helpY, 0xFF808080.toInt(), false)
+        val version = FabricLoader.getInstance().getModContainer("skyblock-improved").orElse(null)?.metadata?.version?.toString() ?: "?"
+        graphics.drawString(font, "v$version", w - font.width("v$version") - 8, helpY, 0xFF606060.toInt(), false)
 
         if (tooltipText.isNotBlank() && tooltipHover?.percent() ?: 0f >= 100f) {
             renderTooltipBox(graphics, tooltipText, tooltipX.toInt(), tooltipY.toInt())
@@ -185,27 +188,42 @@ object ClickGui : Screen(Component.literal("Skyblock Improved")) {
     }
 
     override fun keyPressed(keyEvent: KeyEvent): Boolean {
-        if (super.keyPressed(keyEvent)) return true
+        if (isAnySettingListening()) {
+            if (panels.any { it.keyPressed(keyEvent) }) return true
+            if (keyEvent.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+                for (module in ModuleManager.modules.values) {
+                    for (setting in module.settings.values) {
+                        when (setting) {
+                            is me.sbi.settings.impl.StringSetting -> setting.listening = false
+                            is me.sbi.settings.impl.KeybindSetting -> setting.listening = false
+                            is me.sbi.settings.impl.ColorSetting -> setting.collapse()
+                            else -> {}
+                        }
+                    }
+                }
+                return true
+            }
+            return false
+        }
         if (keyEvent.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
             onClose()
             return true
         }
-        if (!isAnySettingListening()) {
-            when (keyEvent.key()) {
-                org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE -> {
-                    if (searchBuffer.isNotEmpty()) {
-                        searchBuffer = searchBuffer.dropLast(1)
-                        return true
-                    }
+        if (panels.any { it.keyPressed(keyEvent) }) return true
+        if (super.keyPressed(keyEvent)) return true
+        when (keyEvent.key()) {
+            org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE -> {
+                if (searchBuffer.isNotEmpty()) {
+                    searchBuffer = searchBuffer.dropLast(1)
+                    return true
                 }
             }
         }
-        return panels.any { it.keyPressed(keyEvent) }
+        return false
     }
 
     override fun charTyped(characterEvent: CharacterEvent): Boolean {
         if (isAnySettingListening()) {
-            if (super.charTyped(characterEvent)) return true
             return panels.any { it.charTyped(characterEvent) }
         }
         if (characterEvent.codepoint() in 32..126 && searchBuffer.length < 64) {
