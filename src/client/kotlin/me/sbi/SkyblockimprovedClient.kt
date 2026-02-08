@@ -16,6 +16,7 @@ import me.sbi.modules.render.ClickGuiModule
 import me.sbi.modules.skyblock.SkyBlockData
 import me.sbi.modules.skyblock.SkyBlockParty
 import me.sbi.util.SbiLog
+import me.sbi.util.UpdateChecker
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback
@@ -130,6 +131,9 @@ object SkyblockimprovedClient : ClientModInitializer {
                 context.drawCenteredString(mc.font, comp, w / 2, textY, 0xFFFFFF00.toInt())
             }
         }
+
+        // Check for updates (async, once per session)
+        UpdateChecker.checkAsync()
 
         openGuiKey = KeyBindingHelper.registerKeyBinding(KeyMapping(
             "key.skyblock-improved.open_gui",
