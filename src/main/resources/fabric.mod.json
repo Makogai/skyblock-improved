@@ -1,0 +1,45 @@
+{
+	"schemaVersion": 1,
+	"id": "skyblock-improved",
+	"version": "${version}",
+	"name": "skyblock-improved",
+	"description": "A Hypixel Skyblock mod with modular features and overlay-style config.",
+	"authors": [
+		"sbi"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/skyblock-improved/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			{
+				"value": "me.sbi.Skyblockimproved",
+				"adapter": "kotlin"
+			}
+		],
+		"client": [
+			{
+				"value": "me.sbi.SkyblockimprovedClient",
+				"adapter": "kotlin"
+			}
+		]
+	},
+	"mixins": [
+		"skyblock-improved.mixins.json",
+		{
+			"config": "skyblock-improved.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.17.0",
+		"minecraft": "~1.21.10",
+		"java": ">=21",
+		"fabric-api": "*",
+		"fabric-language-kotlin": "*"
+	}
+}

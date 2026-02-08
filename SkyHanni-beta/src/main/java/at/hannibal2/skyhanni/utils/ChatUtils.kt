@@ -1,0 +1,511 @@
+package at.hannibal2.skyhanni.utils
+
+import at.hannibal2.skyhanni.SkyHanniMod
+import at.hannibal2.skyhanni.api.event.HandleEvent
+import at.hannibal2.skyhanni.data.ChatManager.deleteChatLine
+import at.hannibal2.skyhanni.data.ChatManager.editChatLine
+import at.hannibal2.skyhanni.events.MessageSendToServerEvent
+import at.hannibal2.skyhanni.events.chat.SkyHanniChatEvent
+import at.hannibal2.skyhanni.skyhannimodule.SkyHanniModule
+import at.hannibal2.skyhanni.utils.ConfigUtils.jumpToEditor
+import at.hannibal2.skyhanni.utils.LorenzColor.Companion.toLorenzColor
+import at.hannibal2.skyhanni.utils.StringUtils.removeColor
+import at.hannibal2.skyhanni.utils.StringUtils.stripHypixelMessage
+import at.hannibal2.skyhanni.utils.TimeUtils.ticks
+import at.hannibal2.skyhanni.utils.chat.TextHelper
+import at.hannibal2.skyhanni.utils.chat.TextHelper.asComponent
+import at.hannibal2.skyhanni.utils.chat.TextHelper.onClick
+import at.hannibal2.skyhanni.utils.chat.TextHelper.send
+import at.hannibal2.skyhanni.utils.compat.MinecraftCompat
+import at.hannibal2.skyhanni.utils.compat.addChatMessageToChat
+import at.hannibal2.skyhanni.utils.compat.append
+import at.hannibal2.skyhanni.utils.compat.command
+import at.hannibal2.skyhanni.utils.compat.componentBuilder
+import at.hannibal2.skyhanni.utils.compat.formattedTextCompat
+import at.hannibal2.skyhanni.utils.compat.hover
+import at.hannibal2.skyhanni.utils.compat.url
+import at.hannibal2.skyhanni.utils.compat.withColor
+import net.minecraft.ChatFormatting
+import net.minecraft.client.GuiMessage
+import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.Component
+import net.minecraft.network.chat.MutableComponent
+import java.lang.UnsupportedOperationException
+import java.util.LinkedList
+import java.util.Queue
+import kotlin.reflect.KProperty0
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.times
+
+@SkyHanniModule
+object ChatUtils {
+
+    // TODO log based on chat category (error, warning, debug, user error, normal)
+    private val log = LorenzLogger("chat/mod_sent")
+    var lastButtonClicked = 0L
+
+    private const val DEBUG_PREFIX = "[SkyHanni Debug] §7"
+    private const val USER_ERROR_PREFIX = "§c[SkyHanni] "
+    private const val CHAT_PREFIX = "[SkyHanni] "
+
+    /**
+     * Sends a debug message to the chat and the console.
+     * This is only sent if the debug feature is enabled.
+     *
+     * @param message The message to be sent
+     *
+     * @see DEBUG_PREFIX
+     */
+    fun debug(
+        message: String,
+        replaceSameMessage: Boolean = false,
+    ) {
+        if (SkyBlockUtils.debug && internalChat(DEBUG_PREFIX + message, replaceSameMessage)) {
+            consoleLog("[Debug] $message")
+        }
+    }
+
+    /**
+     * Sends a message to the user that they did something incorrectly.
+     * We should tell them what to do instead as well.
+     *
+     * @param message The message to be sent
+     *
+     * @see USER_ERROR_PREFIX
+     */
+    fun userError(
+        message: String,
+        replaceSameMessage: Boolean = false,
+    ) {
+        internalChat(USER_ERROR_PREFIX + message, replaceSameMessage)
+    }
+
+    /**
+     * Sends a message to the user
+     * @param message The message to be sent
+     * @param prefix Whether to prefix the message with the chat prefix, default true
+     * @param prefixColor Color that the prefix should be, default yellow (§e)
+     * @param replaceSameMessage Replace the old message with this new message if they are identical
+     *
+     * @see CHAT_PREFIX
+     */
+    fun chat(
+        message: String,
+        prefix: Boolean = true,
+        prefixColor: String? = null,
+        replaceSameMessage: Boolean = false,
+        onlySendOnce: Boolean = false,
+        messageId: Int? = null,
+    ) {
+        var color: Int? = null
+        if (prefixColor != null) {
+            color = prefixColor.replace("§", "")[0].toLorenzColor()?.toColor()?.rgb
+        }
+        chat(message.asComponent(), prefix, color, replaceSameMessage, onlySendOnce, messageId)
+    }
+
+    fun chat(
+        message: Component,
+        prefix: Boolean = true,
+        prefixColor: Int? = null,
+        replaceSameMessage: Boolean = false,
+        onlySendOnce: Boolean = false,
+        messageId: Int? = null,
+    ) {
+        if (prefix) {
+            val text = getFormattedChatPrefix(prefixColor).append(message)
+            internalChatComponent(text, replaceSameMessage, onlySendOnce, messageId = messageId)
+        } else {
+            internalChatComponent(message, replaceSameMessage, onlySendOnce, messageId = messageId)
+        }
+    }
+
+    private val messagesThatAreOnlySentOnce = mutableSetOf<String>()
+    private val messagesThatAreOnlySentOnceComponent = mutableSetOf<Component>()
+
+    private fun internalChat(
+        message: String,
+        replaceSameMessage: Boolean,
+        onlySendOnce: Boolean = false,
+        messageId: Int? = null,
+    ): Boolean {
+        val text = message.asComponent()
+        if (onlySendOnce && !messagesThatAreOnlySentOnce.add(message)) return false
+        return if (replaceSameMessage || messageId != null) {
+            text.send(messageId ?: message.getUniqueMessageIdForString())
+            logAndSendMessage(text, false)
+        } else logAndSendMessage(text)
+    }
+
+    private fun internalChatComponent(
+        message: Component,
+        replaceSameMessage: Boolean,
+        onlySendOnce: Boolean = false,
+        messageId: Int? = null,
+    ): Boolean {
+        if (onlySendOnce && !messagesThatAreOnlySentOnceComponent.add(message)) return false
+        return if (replaceSameMessage || messageId != null) {
+            message.send(messageId ?: message.getUniqueMessageIdForString())
+            logAndSendMessage(message, false)
+        } else logAndSendMessage(message)
+    }
+
+    private fun logAndSendMessage(message: Component, send: Boolean = true): Boolean {
+        val formattedMessage = message.formattedTextCompat()
+        log.log(formattedMessage)
+
+        if (!MinecraftCompat.localPlayerExists) {
+            consoleLog(message.string.removeColor())
+            return false
+        }
+
+        if (send) addChatMessageToChat(message)
+        return true
+    }
+
+    /**
+     * Sends a message to the user that they can click and run an action
+     * @param message The message to be sent
+     * @param onClick The runnable to be executed when the message is clicked
+     * @param hover The string to be shown when the message is hovered
+     * @param expireAt When the click action should expire, default never
+     * @param prefix Whether to prefix the message with the chat prefix, default true
+     * @param prefixColor Color that the prefix should be, default yellow (§e)
+     * @param replaceSameMessage Replace the old message with this new message if they are identical
+     *
+     * @see CHAT_PREFIX
+     */
+    fun clickableChat(
+        message: String,
+        onClick: () -> Unit,
+        hover: String = "§eClick here!",
+        expireAt: SimpleTimeMark = SimpleTimeMark.farFuture(),
+        prefix: Boolean = true,
+        prefixColor: String? = null,
+        oneTimeClick: Boolean = false,
+        replaceSameMessage: Boolean = false,
+    ) {
+        var color: Int? = null
+        if (prefixColor != null) {
+            color = prefixColor.replace("§", "")[0].toLorenzColor()?.toColor()?.rgb
+        }
+        val msgPrefix = if (prefix) getFormattedChatPrefix(color) else Component.empty()
+
+        val text = componentBuilder {
+            append(msgPrefix)
+            append(message) {
+                if (color == null) withColor(ChatFormatting.YELLOW)
+                else withColor(color)
+            }
+            this.onClick(expireAt, oneTimeClick, onClick)
+            this.hover = hover.asComponent()
+        }
+
+        if (replaceSameMessage) text.send(text.getUniqueMessageIdForString())
+        else logAndSendMessage(text)
+    }
+
+    /**
+     * Sends the message in chat.
+     * Show the lines when on hover.
+     * Offer option to click on the chat message to copy the lines to clipboard.
+     * Useful for quick debug infos
+     */
+    fun clickToClipboard(message: String, lines: List<String>) {
+        val text = lines.joinToString("\n") { "§7$it" }
+        clickableChat(
+            "$message §7(hover for info)",
+            hover = "$text\n \n§eClick to copy to clipboard!",
+            onClick = {
+                ClipboardUtils.copyToClipboard(text.removeColor())
+            },
+        )
+    }
+
+    private val uniqueMessageIdStorage = mutableMapOf<String, Int>()
+    private fun String.getUniqueMessageIdForString() = uniqueMessageIdStorage.getOrPut(this) {
+        getUniqueMessageId()
+    }
+
+    private fun Component.getUniqueMessageIdForString() = uniqueMessageIdStorage.getOrPut(this.string) {
+        getUniqueMessageId()
+    }
+
+    private var lastUniqueMessageId = 123242
+
+    fun getUniqueMessageId() = lastUniqueMessageId++
+
+    /**
+     * Sends a message to the user that they can click and run a command
+     * @param message The message to be sent
+     * @param hover The message to be shown when the message is hovered
+     * @param command The command to be executed when the message is clicked
+     * @param prefix Whether to prefix the message with the chat prefix, default true
+     * @param prefixColor Color that the prefix should be, default yellow (§e)
+     *
+     * @see CHAT_PREFIX
+     */
+    fun hoverableChat(
+        message: String,
+        hover: List<String>,
+        command: String? = null,
+        prefix: Boolean = true,
+        prefixColor: String? = null,
+    ) {
+        var color: Int? = null
+        if (prefixColor != null) {
+            color = prefixColor.replace("§", "")[0].toLorenzColor()?.toColor()?.rgb
+        }
+        val msgPrefix = if (prefix) getFormattedChatPrefix(color) else Component.empty()
+
+        logAndSendMessage(
+            componentBuilder {
+                append(msgPrefix)
+                append(message) {
+                    if (color == null) withColor(ChatFormatting.YELLOW)
+                    else withColor(color)
+                }
+                this.hover = TextHelper.multiline(hover)
+                if (command != null) {
+                    this.command = command
+                }
+            },
+        )
+    }
+
+    /**
+     * Sends a message to the user that they can click and run a command
+     * @param message The message to be sent
+     * @param url The url to be opened
+     * @param autoOpen Automatically opens the url as well as sending the clickable link message
+     * @param hover The message to be shown when the message is hovered
+     * @param prefix Whether to prefix the message with the chat prefix, default true
+     * @param prefixColor Color that the prefix should be, default yellow (§e)
+     *
+     * @see CHAT_PREFIX
+     */
+    fun clickableLinkChat(
+        message: String,
+        url: String,
+        hover: String = "§eOpen $url",
+        autoOpen: Boolean = false,
+        prefix: Boolean = true,
+        prefixColor: String? = null,
+        replaceSameMessage: Boolean = false,
+    ) {
+        var color: Int? = null
+        if (prefixColor != null) {
+            color = prefixColor.replace("§", "")[0].toLorenzColor()?.toColor()?.rgb
+        }
+        val msgPrefix = if (prefix) getFormattedChatPrefix(color) else Component.empty()
+        val text = componentBuilder {
+            append(msgPrefix)
+            append(message) {
+                if (color == null) withColor(ChatFormatting.YELLOW)
+                else withColor(color)
+            }
+            this.url = url
+            this.hover = hover.asComponent {
+                if (color != null) withColor(color)
+                else withColor(ChatFormatting.YELLOW)
+            }
+        }
+
+        if (replaceSameMessage) text.send(message.getUniqueMessageIdForString())
+        else logAndSendMessage(text)
+
+        if (autoOpen) OSUtils.openBrowser(url)
+    }
+
+    private val chatGui get() = Minecraft.getInstance().gui.chat
+
+    var chatLines: MutableList<GuiMessage>
+        get() = chatGui.allMessages
+        set(value) {
+            chatGui.allMessages = value
+        }
+
+    var drawnChatLines: MutableList<GuiMessage.Line>
+        get() = chatGui.trimmedMessages
+        set(value) {
+            chatGui.trimmedMessages = value
+        }
+
+    /** Edits the first message in chat that matches the given [predicate] to the new [component]. */
+    fun editFirstMessage(
+        component: (Component) -> Component,
+        reason: String,
+        predicate: (GuiMessage) -> Boolean,
+    ) {
+        chatLines.editChatLine(component, predicate, reason)
+        refreshChat()
+    }
+
+    /**
+     * Deletes a maximum of [amount] messages in chat that match the given [predicate].
+     */
+    fun deleteMessage(
+        reason: String,
+        amount: Int = 1,
+        predicate: (GuiMessage) -> Boolean,
+    ) {
+        chatLines.deleteChatLine(amount, reason, predicate)
+        refreshChat()
+    }
+
+    private fun refreshChat() {
+        DelayedRun.runNextTick {
+            chatGui.rescaleChat()
+        }
+    }
+
+    private var deleteNext: Pair<String, (String) -> Boolean>? = null
+
+    @HandleEvent(priority = HandleEvent.HIGH)
+    fun onChat(event: SkyHanniChatEvent.Allow) {
+        val (reason, predicate) = deleteNext ?: return
+        this.deleteNext = null
+
+        if (predicate(event.message)) {
+            event.blockedReason = reason
+        }
+    }
+
+    @HandleEvent
+    fun onSendMessage(event: MessageSendToServerEvent) {
+        if (event.senderIsSkyhanni()) return
+        lastMessageSent = SimpleTimeMark.now()
+    }
+
+    fun deleteNextMessage(
+        reason: String,
+        predicate: (String) -> Boolean,
+    ) {
+        deleteNext = reason to predicate
+    }
+
+    private var lastMessageSent = SimpleTimeMark.farPast()
+    private val sendQueue: Queue<String> = LinkedList()
+    private val messageDelay = 300.milliseconds
+
+    fun getTimeWhenNewlyQueuedMessageGetsExecuted() =
+        (lastMessageSent + sendQueue.size * messageDelay).takeIf { !it.isInPast() } ?: SimpleTimeMark.now()
+
+    @HandleEvent
+    fun onTick() {
+        if (lastMessageSent.passedSince() > messageDelay) {
+            MinecraftCompat.localPlayer.connection.sendChat(sendQueue.poll() ?: return)
+            lastMessageSent = SimpleTimeMark.now()
+        }
+    }
+
+    fun sendMessageToServer(message: String) {
+        if (canSendInstantly()) {
+            MinecraftCompat.localPlayerOrNull?.let {
+                it.connection.sendChat(message)
+                lastMessageSent = SimpleTimeMark.now()
+                return
+            }
+        }
+        sendQueue.add(message)
+    }
+
+    private fun canSendInstantly() = sendQueue.isEmpty() && lastMessageSent.passedSince() > messageDelay
+
+    fun MessageSendToServerEvent.isCommand(commandWithSlash: String) = splitMessage.takeIf {
+        it.isNotEmpty()
+    }?.get(0) == commandWithSlash
+
+    fun MessageSendToServerEvent.isCommand(commandsWithSlash: Collection<String>) =
+        splitMessage.takeIf { it.isNotEmpty() }?.get(0) in commandsWithSlash
+
+    fun MessageSendToServerEvent.senderIsSkyhanni() = originatingModContainer?.id == "skyhanni"
+
+    fun MessageSendToServerEvent.eventWithNewMessage(message: String) =
+        MessageSendToServerEvent(message, message.split(" "), this.originatingModContainer)
+
+    fun chatAndOpenConfig(message: String, property: KProperty0<*>) {
+        clickableChat(
+            message,
+            onClick = { property.jumpToEditor() },
+            "§eClick to find setting in the config!",
+        )
+    }
+
+    fun clickToActionOrDisable(
+        message: String,
+        option: KProperty0<*>,
+        actionName: String,
+        action: () -> Unit,
+        oneTimeClick: Boolean = false,
+    ) {
+        val hint = if (SkyHanniMod.feature.chat.hideClickableHint) "" else
+            "\n§e[CLICK to $actionName or disable this feature]"
+        clickableChat(
+            "$message$hint",
+            onClick = {
+                if (KeyboardManager.isShiftKeyDown() || KeyboardManager.isModifierKeyDown()) {
+                    option.jumpToEditor()
+                } else {
+                    action()
+                }
+            },
+            hover = "§eClick to $actionName!\n§eShift-Click or Control-Click to disable this feature!",
+            oneTimeClick = oneTimeClick,
+            replaceSameMessage = true,
+        )
+    }
+
+    /**
+     * Almost identical to chatAndOpenConfig and clickToActionOrDisable.
+     * Diff to chatAndOpenConfig: uses the wording "disable" as alternative, not "open config".
+     * Diff to clickToActionOrDisable: does not offer a normal click and action behavior.
+     */
+    fun notifyOrDisable(
+        message: String,
+        option: KProperty0<*>,
+        oneTimeClick: Boolean = false,
+    ) {
+        val hint = if (SkyHanniMod.feature.chat.hideClickableHint) "" else
+            "\n§e[CLICK to disable this feature]"
+        clickableChat(
+            "$message$hint",
+            onClick = { option.jumpToEditor() },
+            hover = "§eClick to disable this feature!",
+            oneTimeClick = oneTimeClick,
+            replaceSameMessage = true,
+        )
+    }
+
+    var Component.skyhanniCreated: Boolean
+        get() = (this as? MutableComponent)?.`skyhanni$didCreate`() ?: false
+        set(value) {
+            if (this !is MutableComponent) {
+                throw UnsupportedOperationException("Attempted to set skyhanniCreated on non-MutableComponent instance")
+            }
+            `skyhanni$setCreated`(value)
+        }
+
+    var GuiMessage.fullComponent: Component
+        get() = `skyhanni$getFullComponent`()
+        set(value) { `skyhanni$setFullComponent`(value) }
+
+    val GuiMessage.chatMessage get() = content.formattedTextCompat().stripHypixelMessage()
+    fun GuiMessage.passedSinceSent() = (Minecraft.getInstance().gui.guiTicks - addedTime()).ticks
+
+    fun consoleLog(text: String) {
+        SkyHanniMod.consoleLog(text)
+    }
+
+    private fun getFormattedChatPrefix(prefixColor: Int?): Component {
+        return componentBuilder {
+            if (prefixColor != null) {
+                append(CHAT_PREFIX)
+                withColor(prefixColor)
+            } else {
+                append(TextHelper.createGradientText(LorenzColor.YELLOW, LorenzColor.GOLD, CHAT_PREFIX))
+                withColor(ChatFormatting.YELLOW)
+            }
+        }
+    }
+}

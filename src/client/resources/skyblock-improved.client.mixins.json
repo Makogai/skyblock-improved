@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"package": "me.sbi.mixin.client",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"ExampleClientMixin",
+		"TabListPacketMixin",
+		"ChatComponentMixin",
+		"ConnectionMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
