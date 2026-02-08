@@ -32,10 +32,10 @@ class BooleanSetting(
         graphics.fill(x.toInt(), y.toInt(), (x + w).toInt(), (y + height).toInt(), 0xFF151515.toInt())
         graphics.fill(x.toInt(), (y + height - 1).toInt(), (x + w).toInt(), (y + height).toInt(), 0xFF2A2A2A.toInt())
 
-        // Standard toggle: OFF = gray track, knob left | ON = colored track, knob right
-        val trackW = 38
-        val trackH = 14
-        val knobSize = 12
+        // Standard toggle: OFF = gray track + knob left | ON = colored track + knob right
+        val trackW = 40
+        val trackH = 18
+        val knobSize = 14
         val pad = 2
         val toggleX = (x + w - trackW - 8).toInt()
         val toggleY = (y + height / 2 - trackH / 2).toInt()
@@ -45,16 +45,16 @@ class BooleanSetting(
         val hovered = mouseX >= toggleX && mouseX <= toggleX + trackW && mouseY >= toggleY && mouseY <= toggleY + trackH
 
         if (value) {
-            // ON: colored track (accent), knob on right
+            // ON: full accent-colored track, white knob on right
             graphics.fill(toggleX, toggleY, toggleX + trackW, toggleY + trackH, GuiStyle.accent)
             graphics.fill(knobX, knobY, knobX + knobSize, knobY + knobSize, 0xFFFFFFFF.toInt())
         } else {
-            // OFF: grayish track, knob on left
-            val trackGray = if (hovered) 0xFF4A4A4A.toInt() else 0xFF404040.toInt()
+            // OFF: muted gray track, gray knob on left
+            val trackGray = if (hovered) 0xFF555555.toInt() else 0xFF484848.toInt()
             graphics.fill(toggleX, toggleY, toggleX + trackW, toggleY + trackH, trackGray)
-            graphics.fill(toggleX, toggleY + trackH - 1, toggleX + trackW, toggleY + trackH, 0xFF2A2A2A.toInt())
-            graphics.fill(knobX, knobY, knobX + knobSize, knobY + knobSize, 0xFFE8E8E8.toInt())
-            graphics.fill(knobX, knobY + knobSize - 1, knobX + knobSize, knobY + knobSize, 0xFFC0C0C0.toInt())
+            graphics.fill(toggleX, toggleY + trackH - 1, toggleX + trackW, toggleY + trackH, 0xFF383838.toInt())
+            graphics.fill(knobX, knobY, knobX + knobSize, knobY + knobSize, 0xFFD8D8D8.toInt())
+            graphics.fill(knobX, knobY + knobSize - 1, knobX + knobSize, knobY + knobSize, 0xFFB0B0B0.toInt())
         }
 
         graphics.drawString(mc.font, name, (x + 8).toInt(), (y + height / 2 - 4).toInt(), 0xFFE8E8E8.toInt(), true)
@@ -65,8 +65,8 @@ class BooleanSetting(
     override fun mouseClicked(mouseX: Float, mouseY: Float, button: Int): Boolean {
         if (button != 0) return false
         val w = GuiConstants.SETTING_WIDTH.toFloat()
-        val trackW = 38
-        val trackH = 14
+        val trackW = 40
+        val trackH = 18
         val toggleX = lastX + w - trackW - 8
         val toggleY = lastY + getHeight() / 2 - trackH / 2
         if (mouseX >= toggleX && mouseX <= toggleX + trackW && mouseY >= toggleY && mouseY <= toggleY + trackH) {

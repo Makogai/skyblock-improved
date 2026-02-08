@@ -44,6 +44,8 @@ object ClickGui : Screen(Component.literal("Skyblock Improved")) {
         }
     }
 
+    private var searchBuffer = ""
+
     override fun init() {
         super.init()
         val w = width
@@ -57,12 +59,33 @@ object ClickGui : Screen(Component.literal("Skyblock Improved")) {
             .apply {
                 setHint(Component.literal("Filter modules..."))
                 setMaxLength(64)
+                setValue(searchBuffer)
             }
         addRenderableWidget(searchBox!!)
+        setInitialFocus(searchBox!!)
+    }
+
+    private fun isAnySettingListening(): Boolean {
+        for (module in ModuleManager.modules.values) {
+            for (setting in module.settings.values) {
+                when (setting) {
+                    is me.sbi.settings.impl.StringSetting -> if (setting.listening) return true
+                    is me.sbi.settings.impl.KeybindSetting -> if (setting.listening) return true
+                    is me.sbi.settings.impl.ColorSetting -> if (setting.hexListening) return true
+                    else -> {}
+                }
+            }
+        }
+        return false
     }
 
     override fun render(graphics: GuiGraphics, mouseX: Int, mouseY: Int, delta: Float) {
-        val searchQuery = searchBox?.value?.trim() ?: ""
+        searchBox?.let { box ->
+            val boxVal = box.value
+            if (boxVal != searchBuffer) searchBuffer = boxVal
+            box.setValue(searchBuffer)
+        }
+        val searchQuery = searchBuffer.trim()
         panels.forEach { it.searchQuery = searchQuery }
         val w = graphics.guiWidth()
         val h = graphics.guiHeight()
@@ -167,18 +190,30 @@ object ClickGui : Screen(Component.literal("Skyblock Improved")) {
             onClose()
             return true
         }
-        for (panel in panels) {
-            if (panel.keyPressed(keyEvent)) return true
+        if (!isAnySettingListening()) {
+            when (keyEvent.key()) {
+                org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE -> {
+                    if (searchBuffer.isNotEmpty()) {
+                        searchBuffer = searchBuffer.dropLast(1)
+                        return true
+                    }
+                }
+            }
         }
-        return false
+        return panels.any { it.keyPressed(keyEvent) }
     }
 
     override fun charTyped(characterEvent: CharacterEvent): Boolean {
-        if (super.charTyped(characterEvent)) return true
-        for (panel in panels) {
-            if (panel.charTyped(characterEvent)) return true
+        if (isAnySettingListening()) {
+            if (super.charTyped(characterEvent)) return true
+            return panels.any { it.charTyped(characterEvent) }
         }
-        return false
+        if (characterEvent.codepoint() in 32..126 && searchBuffer.length < 64) {
+            searchBuffer += characterEvent.codepoint().toChar()
+            return true
+        }
+        if (super.charTyped(characterEvent)) return true
+        return panels.any { it.charTyped(characterEvent) }
     }
 
     override fun onClose() {
