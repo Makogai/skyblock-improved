@@ -9,7 +9,7 @@ import com.google.gson.JsonObject
  */
 interface ModSyncHandler {
 
-    fun connect(baseUrl: String, clientId: String)
+    fun connect(baseUrl: String, clientId: String, accessToken: String? = null)
 
     fun disconnect()
 

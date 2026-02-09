@@ -14,6 +14,7 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
@@ -31,7 +32,7 @@ class ModSyncAblyHandler : ModSyncHandler {
     private val ablyRef = AtomicReference<AblyRealtime?>(null)
     private val playersChannelRef = AtomicReference<Channel?>(null)
 
-    override fun connect(baseUrl: String, clientId: String) {
+    override fun connect(baseUrl: String, clientId: String, accessToken: String?) {
         executor.execute {
             try {
                 val token = fetchToken(baseUrl, clientId)
@@ -40,6 +41,9 @@ class ModSyncAblyHandler : ModSyncHandler {
                         me.sbi.util.SbiMessage.warn("Mod Sync", "Cannot reach backend at $baseUrl - check API URL and that backend is running")
                     }
                     return@execute
+                }
+                if (!accessToken.isNullOrBlank()) {
+                    sendSessionToBackend(baseUrl, clientId, accessToken)
                 }
                 val options = ClientOptions().apply {
                     this.token = token
@@ -185,6 +189,27 @@ class ModSyncAblyHandler : ModSyncHandler {
         } catch (e: Exception) {
             SkyblockImproved.logger.debug("Token fetch error: {}", e.message)
             null
+        }
+    }
+
+    private fun sendSessionToBackend(baseUrl: String, clientId: String, accessToken: String) {
+        try {
+            val payload = JsonObject().apply {
+                addProperty("clientId", clientId)
+                addProperty("accessToken", accessToken)
+            }
+            val body = com.google.gson.Gson().toJson(payload)
+            val req = HttpRequest.newBuilder(URI.create("$baseUrl/mod/session"))
+                .timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build()
+            val resp = httpClient.send(req, HttpResponse.BodyHandlers.discarding())
+            if (resp.statusCode() !in 200..299) {
+                SkyblockImproved.logger.debug("Session upload returned {}", resp.statusCode())
+            }
+        } catch (e: Exception) {
+            SkyblockImproved.logger.debug("Session upload error: {}", e.message)
         }
     }
 }
