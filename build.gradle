@@ -39,6 +39,14 @@ dependencies {
 	// Fabric API (matches Odin - no extra rendering module)
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 	modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
+	implementation 'io.ably:ably-java:1.2.52'
+	include 'io.ably:ably-java:1.2.52'
+	include 'io.ably:network-client-core:1.2.52'
+	include 'io.ably:network-client-default:1.2.52'
+	include 'org.msgpack:msgpack-core:0.8.11'
+	include 'org.java-websocket:Java-WebSocket:1.5.3'
+	include 'com.google.code.gson:gson:2.9.0'
+	include 'com.davidehrmann.vcdiff:vcdiff-core:0.1.1'
 }
 
 processResources {
@@ -70,11 +78,16 @@ java {
 }
 
 jar {
+	outputs.upToDateWhen { false }
 	inputs.property "archivesName", project.base.archivesName
 
 	from("LICENSE") {
 		rename { "${it}_${inputs.properties.archivesName}"}
 	}
+}
+
+tasks.named("remapJar") {
+	outputs.upToDateWhen { false }
 }
 
 // configure the maven publication

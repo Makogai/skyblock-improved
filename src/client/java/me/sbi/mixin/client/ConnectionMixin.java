@@ -10,7 +10,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Captures CRIT particles to discover invisibug locations when you hit them. */
+/** Captures CRIT particles to discover invisibug locations when you hit them.
+ *  READ-ONLY: Observes incoming (S2C) packets only. Never modifies or sends packets. Watchdog-safe. */
 @Mixin(Connection.class)
 public class ConnectionMixin {
 

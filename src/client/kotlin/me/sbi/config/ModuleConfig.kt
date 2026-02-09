@@ -37,7 +37,7 @@ class ModuleConfig(file: File) {
                 val obj = element?.asJsonObject ?: continue
                 val module = modules[obj.get("name")?.asString?.lowercase()] ?: continue
 
-                if (obj.get("enabled")?.asBoolean != module.enabled) {
+                if (!module.alwaysEnabled && obj.get("enabled")?.asBoolean != module.enabled) {
                     module.toggle()
                 }
 

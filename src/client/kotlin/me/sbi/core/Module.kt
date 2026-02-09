@@ -16,7 +16,9 @@ abstract class Module(
     val description: String = "",
     toggled: Boolean = false,
     /** If true, module is hidden from ClickGui (for internal use like SkyBlockData) */
-    val internal: Boolean = false
+    val internal: Boolean = false,
+    /** If true, module cannot be disabled by the player */
+    val alwaysEnabled: Boolean = false
 ) {
     val settings = linkedMapOf<String, Setting<*>>()
 
@@ -29,9 +31,10 @@ abstract class Module(
     open fun onDisable() {}
 
     open fun onTick() {}
-    open fun onKeybind() { toggle() }
+    open fun onKeybind() { if (!alwaysEnabled) toggle() }
 
     fun toggle() {
+        if (alwaysEnabled && enabled) return
         enabled = !enabled
         if (enabled) onEnable() else onDisable()
     }
