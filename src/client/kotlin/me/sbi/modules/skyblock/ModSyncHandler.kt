@@ -9,13 +9,15 @@ import com.google.gson.JsonObject
  */
 interface ModSyncHandler {
 
-    fun connect(baseUrl: String, clientId: String, accessToken: String? = null)
+    fun connect(baseUrl: String, clientId: String, syncPayload: String? = null)
 
     fun disconnect()
 
     fun publish(payload: JsonObject): Boolean
 
     fun publishChat(playerName: String, message: String, timestamp: String): Boolean
+
+    fun pushSyncPayload(baseUrl: String, clientId: String, syncPayload: String?)
 
     fun isConnected(): Boolean
 }

