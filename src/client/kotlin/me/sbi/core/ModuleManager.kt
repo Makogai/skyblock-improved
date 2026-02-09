@@ -10,6 +10,7 @@ import me.sbi.modules.render.EspModule
 import me.sbi.modules.render.PartyDisplayModule
 import me.sbi.modules.skyblock.AreaDisplayModule
 import me.sbi.modules.skyblock.ChatParserModule
+import me.sbi.modules.skyblock.ModSyncModule
 import me.sbi.modules.skyblock.PartyGuiModule
 import me.sbi.modules.skyblock.SkyBlockDataModule
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -36,7 +37,7 @@ object ModuleManager {
         val allModules = listOf(
             ClickGuiModule, NameChangerModule, CoordsDisplayModule, ExampleMiningModule,
             SkyBlockDataModule, AreaDisplayModule, ChatParserModule, PartyDisplayModule,
-            PartyGuiModule, EspModule, me.sbi.modules.general.TrollModule
+            PartyGuiModule, ModSyncModule, EspModule, me.sbi.modules.general.TrollModule
         )
         val active = allModules.filter { ModuleRegistry.isEnabled(it) }
         registerModules(config, *active.toTypedArray())

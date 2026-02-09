@@ -29,6 +29,9 @@ bin/
 
 *.DS_Store
 
+# Admin panel (separate repos - clone into admin/backend and admin/frontend)
+admin/
+
 # fabric
 
 run/

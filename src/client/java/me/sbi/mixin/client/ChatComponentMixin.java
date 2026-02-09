@@ -1,5 +1,6 @@
 package me.sbi.mixin.client;
 
+import me.sbi.modules.skyblock.ChatTranscriptCollector;
 import me.sbi.modules.skyblock.SkyBlockParty;
 import me.sbi.util.SbiLog;
 import me.sbi.util.SbiMessage;
@@ -12,6 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Intercepts ALL messages added to chat - catches party list regardless of how Hypixel sends it.
+ * READ-ONLY: Observes chat display only. Does not modify or send packets. Watchdog-safe.
  */
 @Mixin(ChatComponent.class)
 public class ChatComponentMixin {
@@ -25,6 +27,8 @@ public class ChatComponentMixin {
             text = message.toString();
         }
         if (text == null || text.isEmpty()) return;
+
+        ChatTranscriptCollector.INSTANCE.add(text);
 
         if (text.toLowerCase().contains("party") && SbiLog.INSTANCE.isDebugEnabled()) {
             SbiLog.INSTANCE.debug("ChatComponent received: " + text.substring(0, Math.min(200, text.length())) + (text.length() > 200 ? "..." : ""));

@@ -132,9 +132,6 @@ object SkyblockimprovedClient : ClientModInitializer {
             }
         }
 
-        // Check for updates (async, once per session)
-        UpdateChecker.checkAsync()
-
         openGuiKey = KeyBindingHelper.registerKeyBinding(KeyMapping(
             "key.skyblock-improved.open_gui",
             com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM,
@@ -146,6 +143,10 @@ object SkyblockimprovedClient : ClientModInitializer {
             if (openGuiKey.consumeClick() && client.screen == null) {
                 client.setScreen(ClickGui)
             }
+        }
+
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
+            UpdateChecker.checkAsync()
         }
     }
 }
